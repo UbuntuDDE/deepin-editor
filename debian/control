@@ -1,25 +1,26 @@
 Source: deepin-editor
 Section: editors
 Priority: optional
-Maintainer: Debian Deepin Packaging Team <pkg-deepin-devel@lists.alioth.debian.org>
+Maintainer: Ananta Mishra <mishraananta2017@gmail.com>
+XSBC-Original-Maintainer: Debian Deepin Packaging Team <pkg-deepin-devel@lists.alioth.debian.org>
 Uploaders: Ma Aiguo <imaiguo@gmail.com>,
 Build-Depends:
  cmake,
- debhelper-compat (= 12),
- pkg-config,
- libqt5widgets5,
- libdtkcore-dev,
- libdtkwidget-dev,
- libpolkit-qt5-1-dev,
- libkf5syntaxhighlighting-dev,
- libkf5codecs-dev,
- qttools5-dev-tools,
- qtbase5-private-dev,
+ debhelper-compat (= 13),
  libdframeworkdbus-dev,
- libgtest-dev,
- libgmock-dev,
+ libdtkcore-dev (>= 5.5~),
+ libdtkwidget-dev (>= 5.5~),
  libenca-dev (>= 1.19),
- libuchardet-dev (>= 0.0.6)
+ libgmock-dev,
+ libgtest-dev,
+ libkf5codecs-dev,
+ libkf5syntaxhighlighting-dev,
+ libpolkit-qt5-1-dev,
+ libqt5svg5-dev,
+ libuchardet-dev(>= 0.0.6),
+ pkg-config,
+ qtbase5-private-dev,
+ qttools5-dev-tools,
 Rules-Requires-Root: no
 Standards-Version: 4.5.1
 Homepage: https://github.com/linuxdeepin/deepin-editor
