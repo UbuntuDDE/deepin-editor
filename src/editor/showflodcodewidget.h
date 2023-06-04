@@ -1,32 +1,16 @@
-/*
-* Copyright (C) 2019 ~ 2021 Uniontech Software Technology Co.,Ltd.
-*
-* Author:     liumaochuan <liumaochuan@uniontech.com>
-*
-* Maintainer: liumaochuan <liumaochuan@uniontech.com>
-*
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+// SPDX-FileCopyrightText: 2019 - 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef SHOWFLODCODEWIDGET_H
 #define SHOWFLODCODEWIDGET_H
 #include <DFrame>
 #include <DPlainTextEdit>
 #include <DApplicationHelper>
-#include <KF5/KSyntaxHighlighting/repository.h>
-#include <KF5/KSyntaxHighlighting/definition.h>
-#include <KF5/KSyntaxHighlighting/syntaxhighlighter.h>
-#include <KF5/KSyntaxHighlighting/theme.h>
+#include <KSyntaxHighlighting/repository.h>
+#include <KSyntaxHighlighting/definition.h>
+#include <KSyntaxHighlighting/syntaxhighlighter.h>
+#include <KSyntaxHighlighting/theme.h>
 
 DWIDGET_USE_NAMESPACE
 

@@ -37,17 +37,24 @@ find_package(GTest REQUIRED)
 find_package(Qt5Xml REQUIRED)
 find_package(Qt5Svg REQUIRED)
 find_package(Qt5Test REQUIRED)
+find_package(ICU COMPONENTS i18n uc REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 include_directories(${Qt5Gui_PRIVATE_INCLUDE_DIRS})
 include_directories(Qt5PrintSupport)
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(src)
-link_libraries(enca)
 link_libraries(uchardet)
+link_libraries(chardet)
+
+pkg_check_modules(chardet REQUIRED chardet)
+include_directories(${chardet_INCLUDE_DIRS})
+link_directories(${chardet_LIBRARY_DIRS})
 
 set(PROJECT_NAME_TEST
     ${PROJECT_NAME}-test)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-inline")
 
 #Include all app own subdirectorys
 
@@ -55,7 +62,8 @@ set(PROJECT_NAME_TEST
 file(GLOB_RECURSE INTRODUCTION_SRC_TEST ${CMAKE_CURRENT_LIST_DIR}/../src/*.cpp)
 #file(GLOB_RECURSE INTRODUCTION_SRC_TEST ${CMAKE_CURRENT_LIST_DIR}/../src/*.)
 #file(GLOB_RECURSE INTRODUCTION_SRC_TEST1 ${CMAKE_CURRENT_LIST_DIR}/src/*.)
-file(GLOB_RECURSE INTRODUCTION_SRC_TEST1 ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp)
+file(GLOB_RECURSE INTRODUCTION_SRC_TEST1 ${CMAKE_CURRENT_LIST_DIR}/src/*.cpp *.theme)
+#file(GLOB_RECURSE INTRODUCTION_SRC_TEST1 ${CMAKE_CURRENT_LIST_DIR}/src/*.theme)
 
 list(REMOVE_ITEM INTRODUCTION_SRC_TEST "${CMAKE_CURRENT_LIST_DIR}/../src/main.cpp")
 list(REMOVE_ITEM INTRODUCTION_SRC_TEST "${CMAKE_CURRENT_LIST_DIR}/../src/dedit/main.cpp")
@@ -90,11 +98,16 @@ target_link_libraries(${PROJECT_NAME_TEST}
     ${Qt5Widgets_LIBRARIES}
     ${Qt5DBus_LIBRARIES}
     ${Qt5Concurrent_LIBRARIES}
+    ${chardet_LIBRARY_DIRS}
     KF5::Codecs
     KF5::SyntaxHighlighting
+    ICU::i18n
+    ICU::uc
     -lpthread
     -lm
-        )
+    uchardet
+    chardet
+)
 
 target_include_directories(${PROJECT_NAME_TEST} PUBLIC ${DtkWidget_INCLUDE_DIRS}
                                                        ${DtkCore_INCLUDE_DIRS}
@@ -126,9 +139,15 @@ if(CMAKE_SAFETYTEST STREQUAL "")
     set(CMAKE_SAFETYTEST "CMAKE_SAFETYTEST_ARG_OFF")
 endif()
 
+#代码覆盖率开关
+if(CMAKE_COVERAGE_ARG STREQUAL "CMAKE_COVERAGE_ARG_ON")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -fprofile-arcs -ftest-coverage")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -fprofile-arcs -ftest-coverage")
+endif()
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D${CMAKE_SAFETYTEST}")
 if(CMAKE_SAFETYTEST STREQUAL "CMAKE_SAFETYTEST_ARG_ON")
   #安全测试选项
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -fsanitize=address -O2")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fsanitize=address -O2")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -fsanitize=undefined,address -O2")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -fsanitize=undefined,address -O2")
 endif()

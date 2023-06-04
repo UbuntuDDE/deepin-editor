@@ -1,75 +1,71 @@
-/* -*- Mode: C++; indent-tabs-mode: nil; tab-width: 4 -*-
- * -*- coding: utf-8 -*-
- *
- * Copyright (C) 2011 ~ 2018 Deepin, Inc.
- *
- * Author:     Wang Yong <wangyong@deepin.com>
- * Maintainer: Rekols    <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2011-2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "dthememanager.h"
 #include "jumplinebar.h"
 
+#include <DThemeManager>
+
 #include <QDebug>
+
+// 各项组件的默认大小
+const int nJumpLineBarWidth = 212;
+const int nJumpLineBarHeight = 60;
+const int s_nJumpLineBarSpinBoxWidth = 124;
+const int s_nJumpLineBarSPinBoxHeight = 36;
+// 水平方向与边界间距
+const int s_nJumpLineBarHorizenMargin = 10;
 
 JumpLineBar::JumpLineBar(DFloatingWidget *parent)
     : DFloatingWidget(parent)
 {
-    // Init.
-    setFixedSize(nJumpLineBarWidth, nJumpLineBarHeight);
-
     // Init layout and widgets.
     m_layout = new QHBoxLayout();
     m_layout->setContentsMargins(10, 6, 10, 6);
-    m_layout->setSpacing(0);
+    m_layout->setSpacing(5);
+
+    m_closeButton = new DIconButton(DStyle::SP_CloseButton);
+    m_closeButton->setIconSize(QSize(30, 30));
+    m_closeButton->setFixedSize(30, 30);
+    m_closeButton->setEnabledCircle(true);
+    m_closeButton->setFlat(true);
 
     m_label = new QLabel();
     m_label->setText(tr("Go to Line: "));
-    m_editLine = new LineBar();
-
-    m_lineValidator = new QIntValidator;
-    m_editLine->lineEdit()->setValidator(m_lineValidator);
+    // 按文本长度计算显示宽度，不同语言下翻译文本长度不一，需完整显示
+    m_label->setFixedWidth(fontMetrics().width(m_label->text()));
+    m_pSpinBoxInput = new DSpinBox;
+    m_pSpinBoxInput->setFixedSize(s_nJumpLineBarSpinBoxWidth, s_nJumpLineBarSPinBoxHeight);
+    m_pSpinBoxInput->lineEdit()->clear();
+    m_pSpinBoxInput->setButtonSymbols(QAbstractSpinBox::NoButtons);
+    m_pSpinBoxInput->installEventFilter(this);
 
     m_layout->addWidget(m_label);
-    m_layout->addWidget(m_editLine);
+    m_layout->addWidget(m_pSpinBoxInput);
+    m_layout->addWidget(m_closeButton);
     this->setLayout(m_layout);
 
+    // 初始化浮动条宽度，根据文本长度计算
+    setFixedHeight(nJumpLineBarHeight);
+    setFixedWidth(m_layout->sizeHint().width() + s_nJumpLineBarHorizenMargin);
+
     connect(this, &JumpLineBar::pressEsc, this, &JumpLineBar::jumpCancel, Qt::QueuedConnection);
-    connect(m_editLine, &LineBar::returnPressed, this, &JumpLineBar::jumpConfirm, Qt::QueuedConnection);
-    connect(m_editLine, &LineBar::textChanged, this, &JumpLineBar::handleLineChanged, Qt::QueuedConnection);
-    connect(m_editLine, &LineBar::focusOut, this, &JumpLineBar::handleFocusOut, Qt::QueuedConnection);
-    connect(m_editLine, &LineBar::focusChanged, this, &JumpLineBar::slotFocusChanged, Qt::QueuedConnection);
+    connect(m_pSpinBoxInput->lineEdit(), &QLineEdit::returnPressed, this, &JumpLineBar::jumpConfirm, Qt::QueuedConnection);
+    connect(m_pSpinBoxInput->lineEdit(), &QLineEdit::textChanged, this, &JumpLineBar::handleLineChanged, Qt::QueuedConnection);
+    connect(m_closeButton, &DIconButton::clicked, this, &JumpLineBar::close, Qt::QueuedConnection);
 }
 
 JumpLineBar::~JumpLineBar()
-{
-    if (m_lineValidator != nullptr) {
-        delete m_lineValidator;
-        m_lineValidator = nullptr;
-    }
-}
+{}
 
 void JumpLineBar::focus()
 {
-    m_editLine->lineEdit()->setFocus();
+    m_pSpinBoxInput->lineEdit()->setFocus();
 }
 
 bool JumpLineBar::isFocus()
 {
-    return m_editLine->lineEdit()->hasFocus();
+    return m_pSpinBoxInput->lineEdit()->hasFocus();
 }
 
 void JumpLineBar::activeInput(QString file, int row, int column, int lineCount, int scrollOffset)
@@ -79,32 +75,37 @@ void JumpLineBar::activeInput(QString file, int row, int column, int lineCount, 
     m_rowBeforeJump = row;
     m_columnBeforeJump = column;
     m_jumpFileScrollOffset = scrollOffset;
-    m_lineValidator->setRange(1, lineCount);
-    setFixedSize(nJumpLineBarWidth + QString::number(lineCount).size() * fontMetrics().width('9'), nJumpLineBarHeight);
+    m_lineCount = lineCount;
+    // 调整为 0~lineCount ，0已被处理不允许首位输入，不影响仅单行的情况
+    // 设置 range 后会自动调整输入范围，不使用 clear() 防止在读取文件时已输入的行号被清空
+    m_pSpinBoxInput->setRange(0, lineCount);
+    int lineWidth = QString::number(lineCount).size() * fontMetrics().width('9');
+    if (m_pSpinBoxInput->minimumWidth() < lineWidth) {
+        m_pSpinBoxInput->setFixedWidth(lineWidth);
+    } else {
+        m_pSpinBoxInput->setFixedWidth(s_nJumpLineBarSpinBoxWidth);
+    }
+    setFixedWidth(m_layout->sizeHint().width() + s_nJumpLineBarHorizenMargin);
 
     // Clear line number.
-    if (m_editLine->lineEdit()->text().toInt() > lineCount)
-        m_editLine->lineEdit()->setText("");
-
-    // Show jump line bar.
-//    show();
-//    raise();
-
-//    // Focus default.
-//    m_editLine->lineEdit()->setFocus();
+    if (m_pSpinBoxInput->lineEdit()->text().toInt() > lineCount)
+        m_pSpinBoxInput->lineEdit()->setText("");
 }
 
 void JumpLineBar::handleFocusOut()
 {
-    hide();
-
+    //hide();
     lostFocusExit();
 }
 
 void JumpLineBar::handleLineChanged()
 {
-    QString content = m_editLine->lineEdit()->text();
+    QString content = m_pSpinBoxInput->lineEdit()->text();
     if (content != "") {
+        if (content.toInt() == 0) {
+            m_pSpinBoxInput->clear();
+            return;
+        }
         jumpToLine(m_jumpFile, content.toInt(), false);
     }
 }
@@ -118,7 +119,7 @@ void JumpLineBar::jumpCancel()
 
 void JumpLineBar::jumpConfirm()
 {
-    QString content = m_editLine->lineEdit()->text();
+    QString content = m_pSpinBoxInput->lineEdit()->text();
     if (content != "") {
         jumpToLine(m_jumpFile, content.toInt(), true);
     }
@@ -127,15 +128,36 @@ void JumpLineBar::jumpConfirm()
 void JumpLineBar::slotFocusChanged(bool bFocus)
 {
     if (bFocus == false) {
-        //hide();
-
         lostFocusExit();
     }
 }
 
 // Hide 跳转到行窗口时，需要清空编辑框中的内容
-void JumpLineBar::hide(){
-    m_editLine->clear();
+void JumpLineBar::hide()
+{
+    m_pSpinBoxInput->clear();
     DFloatingWidget::hide();
+}
+
+int JumpLineBar::getLineCount()
+{
+    return m_lineCount;
+}
+
+bool JumpLineBar::eventFilter(QObject *pObject, QEvent *pEvent)
+{
+    if (pObject == m_pSpinBoxInput) {
+        if (pEvent->type() == QEvent::FocusOut) {
+            handleFocusOut();
+            /**
+             * 规避当DSpinBox输入框里为空且失去focus焦点时会显示上一次输入的数值内容的问题
+             */
+            if (m_pSpinBoxInput->lineEdit()->text() == "") {
+                m_pSpinBoxInput->lineEdit()->clear();
+            }
+        }
+    }
+
+    return DFloatingWidget::eventFilter(pObject, pEvent);
 }
 

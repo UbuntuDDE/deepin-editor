@@ -1,33 +1,38 @@
+// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "replaceallcommond.h"
 
 
 
-ReplaceAllCommond::ReplaceAllCommond(QString& oldText, QString& newText, QTextCursor cursor):
-    m_oldText(oldText),
-    m_newText(newText),
-    m_cursor(cursor)
+ReplaceAllCommand::ReplaceAllCommand(QString &oldText, QString &newText, QTextCursor cursor, QUndoCommand *parent)
+    : QUndoCommand(parent)
+    , m_oldText(oldText)
+    , m_newText(newText)
+    , m_cursor(cursor)
 {
 
 }
-ReplaceAllCommond::~ReplaceAllCommond()
+
+ReplaceAllCommand::~ReplaceAllCommand()
 {
 
 }
 
-void ReplaceAllCommond::redo()
+void ReplaceAllCommand::redo()
 {
-
     m_cursor.setPosition(0);
-    m_cursor.movePosition(QTextCursor::End,QTextCursor::KeepAnchor);
+    m_cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
     m_cursor.deleteChar();
 
     m_cursor.insertText(m_newText);
 }
 
-void ReplaceAllCommond::undo()
+void ReplaceAllCommand::undo()
 {
     m_cursor.setPosition(0);
-    m_cursor.movePosition(QTextCursor::End,QTextCursor::KeepAnchor);
+    m_cursor.movePosition(QTextCursor::End, QTextCursor::KeepAnchor);
     m_cursor.deleteChar();
 
     m_cursor.insertText(m_oldText);

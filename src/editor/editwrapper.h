@@ -1,21 +1,6 @@
-/*
- * Copyright (C) 2017 ~ 2018 Deepin Technology Co., Ltd.
- *
- * Author:     rekols <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2017 - 2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef EDITORBUFFER_H
 #define EDITORBUFFER_H
@@ -25,6 +10,7 @@
 #include "../controls/warningnotices.h"
 #include "../editor/leftareaoftextedit.h"
 #include "../common/CSyntaxHighlighter.h"
+#include "../common/utils.h"
 #include <QVBoxLayout>
 #include <QWidget>
 #include <DMessageManager>
@@ -50,7 +36,7 @@ public:
         QFile::Permissions permissions;
     };
 
-    EditWrapper(Window* window=nullptr,QWidget *parent = nullptr);
+    EditWrapper(Window *window = nullptr, QWidget *parent = nullptr);
     ~EditWrapper();
 
     //清除焦点　梁卫东　２０２０－０９－１４　１１：００：５０
@@ -65,36 +51,41 @@ public:
      * @param qstrTruePath　真实文件路径
      * @param bIsTemFile　修改状态
      */
-    void openFile(const QString &filepath,QString qstrTruePath,bool bIsTemFile = false);
-    //以默认编码encode重写读取去文件
-    bool readFile(QByteArray encode="");
-    //保存文件
-    bool saveFile();
+    void openFile(const QString &filepath, QString qstrTruePath, bool bIsTemFile = false);
+    // 以编码 encode 重新读取文件
+    bool readFile(QByteArray encode = "");
+    // 按编码 encode 保存文件
+    bool saveFile(QByteArray encode = "");
+    /**
+     * @brief getPlainTextContent 获取文本框里的文本内容
+     * @param plainTextConteng 存放获取到的内容
+     */
+    void getPlainTextContent(QByteArray &plainTextContent);
     //重新加载文件编码
-    bool saveAsFile(const QString &newFilePath, QByteArray encodeName);
+    bool saveAsFile(const QString &newFilePath, const QByteArray &encodeName);
     //保存草稿文件
-    bool saveDraftFile();
+    bool saveDraftFile(QString &newFilePath);
     //另存为第一次打开文件编码文件
     bool saveAsFile();
     //重新加载文件编码 1.文件修改 2.文件未修改处理逻辑一样 切换编码重新加载和另存为 梁卫东
     bool reloadFileEncode(QByteArray encode);
+    // 重新加载文件高亮类型
+    void reloadFileHighlight(QString definitionName);
     //重写加载修改文件
     void reloadModifyFile();
     //获取文件编码
     QString getTextEncode();
 
-    /**
-     * @brief saveTemFile 保存备份文件
-     * @param qstrDir　备份文件路径
-     * @return true or false
-     */
+    // 保存备份文件
     bool saveTemFile(QString qstrDir);
     //更新路径
-    void updatePath(const QString &file,QString qstrTruePath = QString());
+    void updatePath(const QString &file, QString qstrTruePath = QString());
     //判断是否修改
     bool isModified();
     //判断是否草稿文件
     bool isDraftFile();
+    //判断是否为备份文件
+    bool isBackupFile();
     //判断内容是否为空
     bool isPlainTextEmpty();
 
@@ -106,7 +97,7 @@ public:
     void showNotify(const QString &message);
     bool getTextChangeFlag();
     void setTextChangeFlag(bool bFlag);
-    void setLineNumberShow(bool bIsShow,bool bIsFirstShow = false);
+    void setLineNumberShow(bool bIsShow, bool bIsFirstShow = false);
     void setShowBlankCharacter(bool ok);
     void handleCursorModeChanged(TextEdit::CursorMode mode);
     void clearDoubleCharaterEncode();
@@ -117,23 +108,42 @@ public:
     Window *window();
     void updateHighlighterAll();
 
+    //get and set m_tModifiedDateTime
+    QDateTime getLastModifiedTime() const;
+    void setLastModifiedTime(const QString &time);
+
+    void updateModifyStatus(bool isModified);
+    void updateSaveAsFileName(QString strOldFilePath, QString strNewFilePath);
+
+    // 取得当前编辑器使用的高亮处理(用于打印高亮)
+    inline CSyntaxHighlighter *getSyntaxHighlighter() const
+    { return m_pSyntaxHighlighter; }
+
 signals:
     void sigClearDoubleCharaterEncode();
 
+protected:
+    // 处理文件加载事件
+    virtual void customEvent(QEvent *e) override;
+
 private:
     // 类似setPlainText(QString) 接口支持大文本加载 不卡顿 秒退出 梁卫东 2020年11月11日16:56:27
-    void loadContent(const QByteArray&);
+    void loadContent(const QByteArray &);
     void handleHightlightChanged(const QString &name);
     int GetCorrectUnicode1(const QByteArray &ba);
+    // 文件加载时重新初始化部分设置
+    void reinitOnFileLoad(const QByteArray &encode);
 
 public slots:
-    void handleFileLoadFinished(const QByteArray &encode,const QByteArray &content);
+    // 处理文档预加载数据
+    void handleFilePreProcess(const QByteArray &encode, const QByteArray &content);
+    void handleFileLoadFinished(const QByteArray &encode, const QByteArray &content, bool error);
     void OnThemeChangeSlot(QString theme);
     void UpdateBottomBarWordCnt(int cnt);
     void OnUpdateHighlighter();
-public:
-    void updateModifyStatus(bool isModified);
-    void updateSaveAsFileName(QString strOldFilePath, QString strNewFilePath);
+    //set the value of m_bIsTemFile
+    void setTemFile(bool value);
+
 private:
     //第一次打开文件编码
     QString m_sFirstEncode = QString("UTF-8");
@@ -141,9 +151,9 @@ private:
     QString  m_sCurEncode = QString("UTF-8");
 
     //左边栏　标记　行号　折叠三合一控件
-    LeftAreaTextEdit* m_pLeftAreaTextEdit = nullptr;
+    LeftAreaTextEdit *m_pLeftAreaTextEdit = nullptr;
     //
-    Window* m_pWindow = nullptr;
+    Window *m_pWindow = nullptr;
     //
     TextEdit *m_pTextEdit = nullptr;
     //
@@ -165,6 +175,9 @@ private:
     //KSyntaxHighlighting::SyntaxHighlighter *m_pSyntaxHighlighter = nullptr;
     CSyntaxHighlighter *m_pSyntaxHighlighter = nullptr;
     bool m_bHighlighterAll = false;
+
+    bool m_bAsyncReadFileFinished = false;
+    bool m_bHasPreProcess = false;               // 预处理标识
 };
 
 #endif

@@ -1,24 +1,6 @@
-/* -*- Mode: C++; indent-tabs-mode: nil; tab-width: 4 -*-
- * -*- coding: utf-8 -*-
- *
- * Copyright (C) 2011 ~ 2018 Deepin, Inc.
- *
- * Author:     Wang Yong <wangyong@deepin.com>
- * Maintainer: Rekols    <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2011-2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "environments.h"
 #include "utils.h"
@@ -26,43 +8,46 @@
 #include "urlinfo.h"
 #include "editorapplication.h"
 #include "performancemonitor.h"
+#include "eventlogutils.h"
 
 #include <DApplication>
 #include <DMainWindow>
 #include <DWidgetUtil>
 #include <DLog>
+#include <DApplicationSettings>
+#include <DSettingsOption>
 
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDBusConnection>
 #include <QDBusInterface>
-#include <QDebug>
 #include <QDesktopWidget>
 #include <QScreen>
+#include <QDebug>
+
 #include <iostream>
-#include <DApplicationSettings>
 
 DWIDGET_USE_NAMESPACE
 
 int main(int argc, char *argv[])
 {
-    using namespace Dtk::Core;
-
+    DCORE_USE_NAMESPACE
     PerformanceMonitor::initializeAppStart();
     if (!QString(qgetenv("XDG_CURRENT_DESKTOP")).toLower().startsWith("deepin")) {
-
         setenv("XDG_CURRENT_DESKTOP", "Deepin", 1);
     }
 
     qputenv("QT_WAYLAND_SHELL_INTEGRATION", "kwayland-shell");
     QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
-    //QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
+    // QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
 
     EditorApplication app(argc, argv);
-    Dtk::Core::DLogManager::registerConsoleAppender();
-    Dtk::Core::DLogManager::registerFileAppender();
-    //save theme
+    // save theme
     DApplicationSettings savetheme;
+
+    // 需在App构造后初始化日志设置
+    DLogManager::registerConsoleAppender();
+    DLogManager::registerFileAppender();
 
     // Parser input arguments.
     QCommandLineParser parser;
@@ -78,6 +63,7 @@ int main(int argc, char *argv[])
         UrlInfo info(path);
         urls << info.url.toLocalFile();
     }
+    qInfo() << Q_FUNC_INFO << "Open file urls" << urls;
 
     bool hasWindowFlag = parser.isSet(newWindowOption);
 
@@ -85,11 +71,25 @@ int main(int argc, char *argv[])
     // Start editor process if not found any editor use DBus.
     if (dbus.registerService("com.deepin.Editor")) {
         StartManager *startManager = StartManager::instance();
+        //埋点记录启动数据
+        QJsonObject objStartEvent{
+            {"tid", Eventlogutils::StartUp},
+            {"version", VERSION},
+            {"mode", 1},
+        };
+        Eventlogutils::GetInstance()->writeLogs(objStartEvent);
 
-        if (hasWindowFlag) {
-            startManager->openFilesInWindow(urls);
+        bool save_tab_before_close =
+            Settings::instance()->settings->option("advance.startup.save_tab_before_close")->value().toBool();
+        if (!save_tab_before_close && urls.isEmpty()) {
+            auto window = startManager->createWindow(true);
+            window->addBlankTab();
         } else {
-            startManager->openFilesInTab(urls);
+            if (hasWindowFlag) {
+                startManager->openFilesInWindow(urls);
+            } else {
+                startManager->openFilesInTab(urls);
+            }
         }
 
         dbus.registerObject("/com/deepin/Editor", startManager, QDBusConnection::ExportScriptableSlots);
@@ -99,10 +99,8 @@ int main(int argc, char *argv[])
     }
     // Just send dbus message to exist editor process.
     else {
-        QDBusInterface notification("com.deepin.Editor",
-                                    "/com/deepin/Editor",
-                                    "com.deepin.Editor",
-                                    QDBusConnection::sessionBus());
+        QDBusInterface notification(
+            "com.deepin.Editor", "/com/deepin/Editor", "com.deepin.Editor", QDBusConnection::sessionBus());
 
         QList<QVariant> args;
         args << urls;

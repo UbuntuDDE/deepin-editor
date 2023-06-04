@@ -1,24 +1,6 @@
-﻿/* -*- Mode: C++; indent-tabs-mode: nil; tab-width: 4 -*-
-* -*- coding: utf-8 -*-
-*
-* Copyright (C) 2011 ~ 2018 Deepin, Inc.
-*
-* Author:     Wang Yong <wangyong@deepin.com>
-* Maintainer: Rekols    <rekols@foxmail.com>
-*
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+﻿// SPDX-FileCopyrightText: 2011-2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef TEXTEDIT_H
 #define TEXTEDIT_H
@@ -27,11 +9,13 @@
 #include "FlashTween.h"
 #include "codeflodarea.h"
 #include "../common/settings.h"
+#include "../common/utils.h"
 #include "../widgets/ColorSelectWdg.h"
 #include "uncommentselection.h"
 //添加自定义撤销重做栈
 #include "inserttextundocommand.h"
 #include "deletetextundocommand.h"
+#include "../widgets/bottombar.h"
 #include <QUndoStack>
 
 #include <KSyntaxHighlighting/Definition>
@@ -49,9 +33,6 @@
 #include <QGestureEvent>
 #include <QProxyStyle>
 
-#define TEXT_EIDT_MARK_ALL  "MARK_ALL"
-
-const QString SELECT_HIGHLIGHT_COLOR = "#2CA7F8";
 enum ConvertCase { UPPER, LOWER, CAPITALIZE };
 
 class ShowFlodCodeWidget;
@@ -75,24 +56,47 @@ public:
         MarkLine,
         MarkAll
     };
+    enum UpdateOperationType {
+        Normal,
+        FileOpenBegin,
+        FileOpenEnd,
+    };
+    enum OperationType {
+        CopyOperation,
+        PasteOperation
+    };
 
-    struct MarkOperation
-    {
-        MarkOperationType type;
-        QTextCursor cursor;
-        QString color;
+    struct MarkOperation {
+        MarkOperationType   type;           // 标记操作类型
+        QTextCursor         cursor;         // 在(MarkAll)时不使用
+        QString             color;          // 标记颜色
+        QString             matchText;      // 匹配文本，仅在全局标记匹配文本(MarkAllMatch)时使用
+
+        MarkOperation(): type(MarkOnce) {}
+    };
+
+    // 标记替换信息，包含光标的绝对信息
+    struct MarkReplaceInfo {
+        MarkOperation       opt;            // 标记项操作
+        int                 start;          // 光标选中起始位置
+        int                 end;            // 光标选中结束位置
+        qint64              time;           // 标记的操作时间
+
+        MarkReplaceInfo(): start(0), end(0), time(0) {}
     };
 
     TextEdit(QWidget *parent = nullptr);
     ~TextEdit() override;
 
-    //在光标处添加删除内容
-
     //直接插入文本
     void insertTextEx(QTextCursor, QString);
+    //同时插入多个位置的文本
+    void insertMultiTextEx(const QList<QPair<QTextCursor, QString>> &multiText);
 
     //直接删除字符 删除选择或一个字符
     void deleteTextEx(QTextCursor);
+    //同时删除多个选取的文本
+    void deleteMultiTextEx(const QList<QTextCursor> &multiText);
 
     //插入选择文本字符
     void insertSelectTextEx(QTextCursor, QString);
@@ -104,7 +108,7 @@ public:
 
     /* 处理快捷键“ctrl + k 和Ctrl +shift +K”,删除到行尾和删除整行的  删除和撤销功能；
      * currLine 表示删除的是不是整行，true 整行,false 删除到行尾 ut002764 2021.6.19*/
-    void deleteSelectTextEx(QTextCursor,QString text,bool currLine);
+    void deleteSelectTextEx(QTextCursor, QString text, bool currLine);
 
     //初始化右键菜单
     void initRightClickedMenu();
@@ -113,29 +117,25 @@ public:
     void popRightMenu(QPoint pos = QPoint());
     //
     void setWrapper(EditWrapper *);
+    EditWrapper *getWrapper();
 
-    EditWrapper* getWrapper();
-
-    /**
-     * @brief getFilePath 获取打开文件路径
-     * @return 打开文件路径
-     */
+    // 获取打开文件路径
     inline QString getFilePath() { return m_sFilePath;}
-    //
-    inline void setFilePath(QString file) { m_sFilePath = file;}
-    //
+    // 设置文件路径
+    inline void setFilePath(const QString &file) { m_sFilePath = file;}
+    // 取得左侧的导航控件，包含行号、书签、折叠控件等
     inline LeftAreaTextEdit *getLeftAreaWidget() { return m_pLeftAreaWidget;}
-    //是否撤销重做操作
-    bool isUndoRedoOpt() {return (m_pUndoStack->canRedo() || m_pUndoStack->canUndo());}
-    //判断是否修改
-    bool getModified() { return (document()->isModified() && (m_pUndoStack->canUndo() || m_pUndoStack->index() != m_lastSaveIndex));}
+
+    // 是否允许撤销重做操作
+    bool isUndoRedoOpt();
+    // 判断文档是否被修改
+    bool getModified();
 
     int getCurrentLine();
     int getCurrentColumn();
     int getPosition();
     int getScrollOffset();
     DMenu *getHighlightMenu();
-
 
     void forwardChar();
     void backwardChar();
@@ -168,15 +168,14 @@ public:
     void scrollLineDown();
     void scrollUp();
     void scrollDown();
+    //copy current line and paste in the next line
     void duplicateLine();
     void copyLines();
 
     //剪切选中行或当前行至剪贴板中
     void cutlines();
 
-    /**
-     * @brief joinLines 合并行
-     */
+    // joinLines 合并行
     void joinLines();
 
     void killLine();
@@ -184,7 +183,6 @@ public:
     void killBackwardWord();
     void killForwardWord();
 
-    void escape();
     void indentText();
     void unindentText();
     void setTabSpaceNumber(int number);
@@ -196,13 +194,13 @@ public:
 
     void setLineWrapMode(bool enable);
     void setFontFamily(QString fontName);
-    void setFontSize(int fontSize);
+    void setFontSize(qreal fontSize);
     void updateFont();
 
     void replaceAll(const QString &replaceText, const QString &withText);
     void replaceNext(const QString &replaceText, const QString &withText);
     void replaceRest(const QString &replaceText, const QString &withText);
-    void beforeReplace(QString _);
+    void beforeReplace(const QString &strReplaceText);
 
     bool findKeywordForward(const QString &keyword);
 
@@ -212,7 +210,7 @@ public:
     void clearFindMatchSelections();
     void updateCursorKeywordSelection(QString keyword, bool findNext);
     void updateHighlightLineSelection();
-    bool updateKeywordSelections(QString keyword, QTextCharFormat charFormat, QList<QTextEdit::ExtraSelection> *listSelection);
+    bool updateKeywordSelections(QString keyword, QTextCharFormat charFormat, QList<QTextEdit::ExtraSelection> &listSelection);
     bool updateKeywordSelectionsInView(QString keyword, QTextCharFormat charFormat, QList<QTextEdit::ExtraSelection> *listSelection);
     bool searchKeywordSeletion(QString keyword, QTextCursor cursor, bool findNext);
     void renderAllSelections();
@@ -224,23 +222,22 @@ public:
     void markAllInView(QString color, qint64 timeStamp = -1);
     void toggleMarkSelections();
 
-    /**
-     * @author shaoyu.guo ut000455
-     * @brief updateMarkAllSelectColor 文档篇幅视图有变更时（翻页/滚动条变化/鼠标滚轮变化/键盘上下键），动态更新绘制可视范围内字符颜色
-     */
-    void updateMarkAllSelectColor();
+    // 颜色标记操作列表和标记替换列表的互相转换函数
+    static QList<QPair<MarkOperation, qint64> > convertReplaceToMark(const QList<MarkReplaceInfo> &replaceInfo);
+    static QList<MarkReplaceInfo> convertMarkToReplace(const QList<QPair<MarkOperation, qint64> > &markInfo);
+    // 手动更新所有的标记信息，用于撤销栈处理更新当前颜色标记操作
+    void manualUpdateAllMark(const QList<QPair<MarkOperation, qint64> > &markInfo);
 
+    // 文档篇幅视图有变更时（翻页/滚动条变化/鼠标滚轮变化/键盘上下键），动态更新绘制可视范围内字符颜色
+    void updateMarkAllSelectColor();
 
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     void codeFLodAreaPaintEvent(QPaintEvent *event);
     void setBookmarkFlagVisable(bool isVisable, bool bIsFirstOpen = false);
     void setCodeFlodFlagVisable(bool isVisable, bool bIsFirstOpen = false);
     void setTheme(const QString &path);
-    bool highlightWordUnderMouse(QPoint pos);
     void removeHighlightWordUnderCursor();
     void setSettings(Settings *settings);
-    //设置tabbar修改状态是否带*,不改变document 修改属性
-    void setTabbarModified(bool modified);
     void copySelectedText();
     void cutSelectedText();
     void pasteText();
@@ -253,8 +250,8 @@ public:
     void completionWord(QString word);
     QString getWordAtMouse();
     QString getWordAtCursor();
-    void toggleReadOnlyMode();
-    void toggleComment(bool sister);
+    void toggleReadOnlyMode(bool notNotify = false);
+    void toggleComment(bool bValue);
     int getNextWordPosition(QTextCursor &cursor, QTextCursor::MoveMode moveMode);
     int getPrevWordPosition(QTextCursor cursor, QTextCursor::MoveMode moveMode);
     bool atWordSeparator(int position);
@@ -264,7 +261,6 @@ public:
     bool getReadOnlyPermission();
     bool getReadOnlyMode();
     void hideRightMenu();
-    void clearBlack();
     void flodOrUnflodAllLevel(bool isFlod);
     void flodOrUnflodCurrentLevel(bool isFlod);
     void getHideRowContent(int iLine);
@@ -272,7 +268,7 @@ public:
     int  getHighLightRowContentLineNum(int iLine);
 
     //代码折叠绘制
-    void paintCodeFlod(QPainter* painter,QRect rect,bool isFlod = false);
+    void paintCodeFlod(QPainter *painter, QRect rect, bool isFlod = false);
     //获取背景颜色
     QColor getBackColor();
     //更新左侧widget宽度
@@ -359,12 +355,6 @@ public:
      */
     QStringList readHistoryRecordofFilePath(QString key);
 
-    /**
-     * @author liumaochuan ut000616
-     * @brief writeHistoryRecord 写入书签相关记录
-     */
-    void writeHistoryRecord();
-
     //标记功能相关
     /**
      * @author liumaochuan ut000616
@@ -421,7 +411,7 @@ public:
      * @param listSelections 添加的指定字符格式列表
      */
     void appendExtraSelection(QList<QTextEdit::ExtraSelection> wordMarkSelections, QTextEdit::ExtraSelection selection
-                             , QString strColor, QList<QTextEdit::ExtraSelection> *listSelections);
+                              , QString strColor, QList<QTextEdit::ExtraSelection> *listSelections);
 
     void setCursorStart(int pos);
     void writeEncodeHistoryRecord();
@@ -473,6 +463,8 @@ public:
      */
     void updateSaveIndex();
 
+    static bool isComment(const QString &text, int index, const QString &commentType);
+
 signals:
     void clickFindAction();
     void clickReplaceAction();
@@ -506,7 +498,11 @@ public slots:
 
     void handleCursorMarkChanged(bool mark, QTextCursor cursor);
 
+    void slotValueChanged(int iValue);
     void adjustScrollbarMargins();
+    void slotSelectionChanged();
+    void slotCanRedoChanged(bool bCanRedo);
+    void slotCanUndoChanged(bool bCanUndo);
     void onSelectionArea();
     void fingerZoom(QString name, QString direction, int fingers);
     void cursorPositionChanged();
@@ -523,7 +519,43 @@ public slots:
     void selectTextInView();
     //设置"全部选中"(全选槽函数)
     void setSelectAll();
+    void slotSigColorSelected(bool bSelected, QColor color);
+    void slotSigColorAllSelected(bool bSelected, QColor color);
+    void slotCutAction(bool checked = false);
+    void slotCopyAction(bool checked = false);
+    void slotPasteAction(bool checked = false);
+    void slotDeleteAction(bool checked = false);
+    void slotSelectAllAction(bool checked = false);
+    bool slotOpenInFileManagerAction(bool checked = false);
+    void slotAddComment(bool checked = false);
+    void slotCancelComment(bool checked = false);
+    void slotVoiceReadingAction(bool checked = false);
+    bool slotStopReadingAction(bool checked = false);
+    void slotdictationAction(bool checked = false);
+    void slotColumnEditAction(bool checked = false);
+    void slotPreBookMarkAction(bool checked = false);
+    void slotNextBookMarkAction(bool checked = false);
+    void slotClearBookMarkAction(bool checked = false);
+    void slotFlodAllLevel(bool checked = false);
+    void slotUnflodAllLevel(bool checked = false);
+    void slotFlodCurrentLevel(bool checked = false);
+    void slotUnflodCurrentLevel(bool checked = false);
+    void slotCancleMarkAllLine(bool checked = false);
+    void slotCancleLastMark(bool checked = false);
+    void slotUndoAvailable(bool undoIsAvailable);
+    void slotRedoAvailable(bool redoIsAvailable);
 
+    void redo_();
+    void undo_();
+
+    void moveText(int from, int to, const QString& text, bool copy = false);
+    QTextCursor findCursor(const QString &substr, const QString &text, int from, bool backward = false, int cursorPos = 0);
+    void onPressedLineNumber(const QPoint& point);
+    QString selectedText(bool checkCRLF = false);
+    void onEndlineFormatChanged(BottomBar::EndlineFormat from,BottomBar::EndlineFormat to);
+
+    // 当前程序调色板更新时重绘部分组件
+    void onAppPaletteChanged();
 
 protected:
     bool event(QEvent *evt) override;   //触摸屏event事件
@@ -540,6 +572,7 @@ protected:
     void contextMenuEvent(QContextMenuEvent *event) override;
     void paintEvent(QPaintEvent *e) override;
     void resizeEvent(QResizeEvent *e) override;
+
 private:
     void unCommentSelection();
     void setComment();
@@ -566,8 +599,22 @@ private:
     void SendtoggleReadOnlyMode();
     void SendtoggleReadmessage();
 
+    // 读取可用内存，判断并解决操作是否可继续执行
+    bool isAbleOperation(int iOperationType);
+    // 计算颜色标记替换信息列表
+    void calcMarkReplaceList(QList<TextEdit::MarkReplaceInfo> &replaceList, const QString &oldText,
+                             const QString &replaceText, const QString &withText, int offset = 0) const;
+    // 查找行号line起始的折叠区域
+    bool findFoldBlock(int line, QTextBlock &beginBlock, QTextBlock &endBlock, QTextBlock &curBlock);
+
+private slots:
+    // 文档内容变更时触发
+    void onTextContentChanged(int from, int charsRemoved, int charsAdded);
+
 public:
     int getFirstVisibleBlockId() const;
+    void setLeftAreaUpdateState(UpdateOperationType statevalue);
+    UpdateOperationType getLeftAreaUpdateState();
 
 public:
     bool bIsSetLineNumberWidth = true;
@@ -587,8 +634,8 @@ private:
     // 不再使用
     //QTextEdit::ExtraSelection m_wordUnderCursorSelection;
     QList<QPair<QTextEdit::ExtraSelection, qint64>> m_wordMarkSelections;///< 记录标记的列表（分行记录）
-    QMap<int,QList<QTextEdit::ExtraSelection>> m_mapWordMarkSelections;///< 记录标记的表（按标记动作记录）
-    QList<QPair<TextEdit::MarkOperation, qint64>> m_markOperations;    ///记录所有标记操作
+    QMap<int, QList<QTextEdit::ExtraSelection>> m_mapWordMarkSelections; ///< 记录标记的表（按标记动作记录）
+    QList<QPair<TextEdit::MarkOperation, qint64>> m_markOperations;    ///记录所有标记操作(包括单个标记和全文标记)
     QMap<QString, QList<QPair<QTextEdit::ExtraSelection, qint64>>> m_mapKeywordMarkSelections; ///记录关键字对应的全文标记
     QTextEdit::ExtraSelection m_markAllSelection;///< “标记所有”的字符格式
     QList<QTextEdit::ExtraSelection> m_markFoldHighLightSelections;
@@ -641,7 +688,7 @@ private:
 
     //yanyuhan
     //颜色标记、折叠/展开、书签、列编辑、设置注释、取消注释;
-	//QAction *m_colorMarkAction;
+    //QAction *m_colorMarkAction;
     DMenu *m_collapseExpandMenu;
     DMenu *m_colorMarkMenu;
     QAction *m_cancleMarkCurrentLine;
@@ -658,7 +705,7 @@ private:
     QString m_strMarkAllLineColorName; ///< “标记所有”选择的颜色名称
 
     // 增加对于颜色选择的 Tab 顺序控制
-    QList<QPair<QAction*,bool>> m_MarkColorMenuTabOrder;
+    QList<QPair<QAction *, bool>> m_MarkColorMenuTabOrder;
 
     QAction *m_addComment;
     QAction *m_cancelComment;
@@ -670,10 +717,10 @@ private:
 
     ShowFlodCodeWidget  *m_foldCodeShow;
 
-    bool m_canUndo;
-    bool m_canRedo;
-    bool m_HightlightYes;
-    bool m_haveWordUnderCursor;
+    bool m_canUndo {false};
+    bool m_canRedo {false};
+    bool m_HightlightYes {false};
+    bool m_haveWordUnderCursor {false};
 
     bool m_cursorMark = false;
     int m_markStartLine = -1;
@@ -686,7 +733,7 @@ private:
     int m_cursorWidthChangeDelay = 2000;
     bool m_bReadOnlyPermission = false;
 
-    int m_fontSize = 16;
+    qreal m_fontSize = 16;
     QString m_fontName;
 
     Comment::CommentDefinition m_commentDefinition;
@@ -716,8 +763,8 @@ private:
     QTextCharFormat m_findHighlightFormat;
     CursorMode m_cursorMode;
 
-    DMenu *m_hlGroupMenu;
-    QActionGroup *m_hlActionGroup;
+    DMenu *m_hlGroupMenu {nullptr};
+    QActionGroup *m_hlActionGroup {nullptr};
 
     QPoint m_lastTouchBeginPos;
     QPointer<QTimer> m_updateEnableSelectionByMouseTimer;
@@ -796,7 +843,7 @@ private:
     bool m_bIsFindClose = false;///< 关闭查找框事件是否发生
     QString m_qstrTruePath;///< 源文件路径
 
-    bool m_isSelectAll;
+    bool m_isSelectAll {false};
 
 private:
     LeftAreaTextEdit *m_pLeftAreaWidget = nullptr;
@@ -808,5 +855,11 @@ private:
     //只读权限模式执行一次的判断变量  ut002764 2021.6.23
     bool m_Permission = false;
     bool m_Permission2 = false;
+    //左边栏更新标记
+    UpdateOperationType m_LeftAreaUpdateState;
+
+    bool m_MidButtonPatse = false;      // 鼠标中键黏贴处理
+    bool m_isPreeditBefore = false;     // 上一个输入法时间是否是 preedit
+    int m_preeditLengthBefore = 0;
 };
 #endif

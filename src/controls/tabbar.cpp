@@ -1,21 +1,6 @@
-/*
- * Copyright (C) 2017 ~ 2018 Deepin Technology Co., Ltd.
- *
- * Author:     rekols <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2017 - 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "tabbar.h"
 #include "../widgets/window.h"
@@ -33,6 +18,29 @@
 #include <QDesktopWidget>
 
 QPixmap *Tabbar::sm_pDragPixmap = nullptr;
+
+/**
+ * @brief ‘&’在Qt中被标记为助记符，替换 \a str 中的‘&’字符为“&&”，以正确显示文件名中的‘&’符号
+ *      painter 绘制 CE_ToolButtonLabel 时设置了 Qt::TextShowMnemonic
+ * @note 在插入、新建标签页时，内部已使用替换，部分外部更新标签页名称，需手动处理
+ * @sa Tabbar::addTabWithIndex(), Tabbar::insertFromMimeData(), Tabbar::setTabText()
+ */
+QString replaceMnemonic(const QString &str)
+{
+    QString tmp = str;
+    tmp.replace(QChar('&'), QString("&&"));
+    return tmp;
+}
+
+/**
+ * @brief ‘&’在Qt中被标记为助记符，替换 \a str 中的"&&字符为'&'，以正确取得文件名中的‘&’符号
+ */
+QString restoreMnemonic(const QString &str)
+{
+    QString tmp = str;
+    tmp.replace(QString("&&"), QChar('&'));
+    return tmp;
+}
 
 Tabbar::Tabbar(QWidget *parent)
     : DTabBar(parent)
@@ -84,12 +92,13 @@ void Tabbar::addTabWithIndex(int index, const QString &filePath, const QString &
     m_tabPaths.insert(index, filePath);
     m_tabTruePaths.insert(index, tipPath);
     // }
-    //除去空白符 梁卫东 ２０２０－０８－２６　１４：４９：１５
-    QString trimmedName = tabName.simplified();
+
+    // 除去空白符 梁卫东 ２０２０－０８－２６　１４：４９：１５ ；适配助记符
+    QString trimmedName = replaceMnemonic(tabName.simplified());
     DTabBar::insertTab(index, trimmedName);
     DTabBar::setCurrentIndex(index);
-    if (filePath.contains("/.local/share/deepin/deepin-editor/")) {
-        if (filePath.contains("/.local/share/deepin/deepin-editor/backup-files") && !tipPath.isNull() && tipPath.length() > 0) {
+    if (filePath.contains(Utils::localDataPath())) {
+        if (Utils::isBackupFile(filePath) && !tipPath.isNull() && tipPath.length() > 0) {
             setTabToolTip(index, tipPath);
         } else {
             setTabToolTip(index, tabName);
@@ -144,7 +153,11 @@ void Tabbar::resizeEvent(QResizeEvent *event)
         setTabToolTip(i, path);
     }
 
-    return DTabBar::resizeEvent(event);
+    // 临时修改方案：通过调用setIconSize()，更新内部的layoutDirty标识，强制重新刷新标签页布局, BUG链接：https://pms.uniontech.com/bug-view-137607.html
+    // TODO: 需要dtk暴露接口重新布局
+    setIconSize(iconSize());
+
+    DTabBar::resizeEvent(event);
 }
 
 void Tabbar::closeTab(int index)
@@ -153,13 +166,17 @@ void Tabbar::closeTab(int index)
         return;
     }
     emit requestHistorySaved(fileAt(index));
-    //qDebug() << "removeTab(index)" << index;
     DTabBar::removeTab(index);
 }
 
 void Tabbar::closeCurrentTab()
 {
     closeTab(currentIndex());
+}
+
+void Tabbar::closeCurrentTab(const QString &strFilePath)
+{
+    closeTab(this->indexOf(strFilePath));
 }
 
 void Tabbar::closeOtherTabs()
@@ -214,12 +231,13 @@ void Tabbar::closeRightTabs(const QString &filePath)
 
 void Tabbar::updateTab(int index, const QString &filePath, const QString &tabName)
 {
-    DTabBar::setTabText(index, tabName);
+    // 适配助记符 '&' 后设置文本
+    setTabText(index, tabName);
     m_tabPaths[index] = filePath;
     m_tabTruePaths[index] = filePath;
-    //show file path at tab,blank file only show it's name.
 
-    if (filePath.contains("/.local/share/deepin/deepin-editor/")) {
+    //show file path at tab,blank file only show it's name.
+    if (filePath.contains(Utils::localDataPath())) {
         setTabToolTip(index, tabName);
     } else {
         QString path = filePath;
@@ -273,7 +291,7 @@ int Tabbar::indexOf(const QString &filePath)
 
 QString Tabbar::currentName() const
 {
-    return DTabBar::tabText(currentIndex());
+    return textAt(currentIndex());
 }
 
 QString Tabbar::currentPath() const
@@ -293,7 +311,18 @@ QString Tabbar::fileAt(int index) const
 
 QString Tabbar::textAt(int index) const
 {
-    return DTabBar::tabText(index);
+    // 获取显示文本时恢复设置的助记符 '&'
+    return restoreMnemonic(DTabBar::tabText(index));
+}
+
+/**
+ * @brief 设置索引 \a index 指向标签页显示文本为 \a text
+ */
+void Tabbar::setTabText(int index, const QString &text)
+{
+    // 替换助记符
+    QString tmp = replaceMnemonic(text);
+    DTabBar::setTabText(index, tmp);
 }
 
 void Tabbar::setTabPalette(const QString &activeColor, const QString &highlightColor)
@@ -343,15 +372,15 @@ QPixmap Tabbar::createDragPixmapFromTab(int index, const QStyleOptionTab &option
     backgroundImage.fill(QColor(palette().color(QPalette::Base)));
     // clip screenshot image with window radius.
     QPainter painter(&backgroundImage);
-    painter.drawImage(5,5,scaledImage);
+    painter.drawImage(5, 5, scaledImage);
     painter.setRenderHint(QPainter::Antialiasing, true);
 
-    if (count() == 1) {
-        this->window()->hide();
+    if (!Utils::isWayland() && count() == 1) {
+        this->window()->showMinimized();
     }
 
     // adjust offset.
-    hotspot->setX(scaledWidth/2);
+    hotspot->setX(scaledWidth / 2);
     hotspot->setY(scaledHeight / 2);
 
     QPainterPath rectPath;
@@ -381,12 +410,12 @@ QPixmap Tabbar::createDragPixmapFromTab(int index, const QStyleOptionTab &option
         return QPixmap::fromImage(backgroundImage);
     }
 
-    #if 0
-    QPixmap backgroundImage = DTabBar::createDragPixmapFromTab(index,option,hotspot);
-    if(sm_pDragPixmap) delete sm_pDragPixmap;
+#if 0
+    QPixmap backgroundImage = DTabBar::createDragPixmapFromTab(index, option, hotspot);
+    if (sm_pDragPixmap) delete sm_pDragPixmap;
     sm_pDragPixmap = new QPixmap(backgroundImage);
     return backgroundImage;
-    #endif
+#endif
 }
 
 QMimeData *Tabbar::createMimeDataFromTab(int index, const QStyleOptionTab &option) const
@@ -717,15 +746,21 @@ void Tabbar::showTabs()
 
 void Tabbar::handleTabReleased(int index)
 {
-    //qDebug() << "handleTabReleased" << index;
     if (index == -1) index = 0;
     QString path = m_listOldTabPath.value(index);
+    if (path.isEmpty()) {
+        return;
+    }
+
     int newIndex = m_tabPaths.indexOf(path);
     const QString tabPath = fileAt(newIndex);
     const QString tabName = textAt(newIndex);
 
     Window *window = static_cast<Window *>(this->window());
     EditWrapper *wrapper = window->wrapper(tabPath);
+    if (!wrapper) {
+        return;
+    }
 
     StartManager::instance()->createWindowFromWrapper(tabName, tabPath, wrapper->textEditor()->getTruePath(), wrapper, wrapper->isModified());
 
@@ -748,11 +783,11 @@ void Tabbar::handleTabDroped(int index, Qt::DropAction action, QObject *target)
 {
     Tabbar *tabbar = qobject_cast<Tabbar *>(target);
     if (tabbar == nullptr) {
-        Window *window = static_cast<Window *>(this->window());
-
-        window->move(QCursor::pos() - window->topLevelWidget()->pos());
-        window->show();
-        window->activateWindow();
+        // tab页拖动到外部应用如网页电子表格或wps电子表格时,
+        // DTabBar::dragActionChanged 信号收到的DropType为MoveAction,
+        // 这种情况下DTabBar内容不能发出DTabBar::tabReleaseRequested来重新构建编辑窗口
+        // 因此只能再次添加判断，若目标文本编辑窗口的TabBar未创建，则重新重建文本编辑窗口
+        handleTabReleased(index);
     } else {
 //        QString path = m_listOldTabPath.value(index);
 //        int newIndex = m_tabPaths.indexOf(path);

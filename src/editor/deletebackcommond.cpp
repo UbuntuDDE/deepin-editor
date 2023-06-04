@@ -1,7 +1,11 @@
+// SPDX-FileCopyrightText: 2022 - 2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "deletebackcommond.h"
 #include <QTextBlock>
 
-DeleteBackCommond::DeleteBackCommond(QTextCursor cursor, QPlainTextEdit *edit):
+DeleteBackCommand::DeleteBackCommand(QTextCursor cursor, QPlainTextEdit *edit):
     m_cursor(cursor),
     m_edit(edit)
 {
@@ -10,26 +14,31 @@ DeleteBackCommond::DeleteBackCommond(QTextCursor cursor, QPlainTextEdit *edit):
     m_insertPos = m_delPos;
 }
 
-DeleteBackCommond::~DeleteBackCommond()
+DeleteBackCommand::~DeleteBackCommand()
 {
 
 }
 
-void DeleteBackCommond::undo()
+void DeleteBackCommand::undo()
 {
     m_cursor.setPosition(m_insertPos);
     m_cursor.insertText(m_delText);
+
+    m_cursor.setPosition(m_delPos);
     m_edit->setTextCursor(m_cursor);
 }
 
-void DeleteBackCommond::redo()
+void DeleteBackCommand::redo()
 {
     m_cursor.setPosition(m_delPos);
     m_cursor.setPosition(m_delPos+m_delText.size(), QTextCursor::KeepAnchor);
     m_cursor.deleteChar();
+
+    // 撤销恢复时光标移回要撤销的位置
+    m_edit->setTextCursor(m_cursor);
 }
 
-DeleteBackAltCommond::DeleteBackAltCommond(QList<QTextEdit::ExtraSelection> &selections,QPlainTextEdit* edit):
+DeleteBackAltCommand::DeleteBackAltCommand(QList<QTextEdit::ExtraSelection> &selections,QPlainTextEdit* edit):
     m_ColumnEditSelections(selections),
     m_edit(edit)
 {
@@ -40,7 +49,7 @@ DeleteBackAltCommond::DeleteBackAltCommond(QList<QTextEdit::ExtraSelection> &sel
         auto cursor = m_ColumnEditSelections[i].cursor;
 
         if(!cursor.hasSelection() && !cursor.atBlockEnd()){
-            cursor.movePosition(QTextCursor::Right,QTextCursor::KeepAnchor,1);
+            cursor.setPosition(cursor.position() + 1, QTextCursor::KeepAnchor);
         }
 
         text = cursor.selectedText();
@@ -59,12 +68,12 @@ DeleteBackAltCommond::DeleteBackAltCommond(QList<QTextEdit::ExtraSelection> &sel
     }
 }
 
-DeleteBackAltCommond::~DeleteBackAltCommond()
+DeleteBackAltCommand::~DeleteBackAltCommand()
 {
 
 }
 
-void DeleteBackAltCommond::undo()
+void DeleteBackAltCommand::undo()
 {
 
     int size = m_deletions.size();
@@ -83,7 +92,7 @@ void DeleteBackAltCommond::undo()
 
 }
 
-void DeleteBackAltCommond::redo()
+void DeleteBackAltCommand::redo()
 {
     int size = m_deletions.size();
 

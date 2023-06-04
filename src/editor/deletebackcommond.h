@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef DELETEBACKCOMMOND_H
 #define DELETEBACKCOMMOND_H
 #include <QUndoCommand>
@@ -5,11 +9,11 @@
 #include <QTextEdit>
 #include <qplaintextedit.h>
 //向后删除单一文字或选中文字的撤销重做
-class DeleteBackCommond:public QUndoCommand
+class DeleteBackCommand:public QUndoCommand
 {
 public:
-    DeleteBackCommond(QTextCursor cursor,QPlainTextEdit* edit);
-    virtual ~DeleteBackCommond();
+    DeleteBackCommand(QTextCursor cursor,QPlainTextEdit* edit);
+    virtual ~DeleteBackCommand();
     virtual void undo();
     virtual void redo();
 
@@ -24,11 +28,11 @@ private:
 };
 
 //列模式下向后删除的撤销重做
-class DeleteBackAltCommond:public QUndoCommand
+class DeleteBackAltCommand:public QUndoCommand
 {
 public:
-    DeleteBackAltCommond(QList<QTextEdit::ExtraSelection> &selections,QPlainTextEdit* edit);
-    virtual ~DeleteBackAltCommond();
+    DeleteBackAltCommand(QList<QTextEdit::ExtraSelection> &selections,QPlainTextEdit* edit);
+    virtual ~DeleteBackAltCommand();
     virtual void undo();
     virtual void redo();
 

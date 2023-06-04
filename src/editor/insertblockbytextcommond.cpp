@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "insertblockbytextcommond.h"
 #include "inserttextundocommand.h"
 #include <QApplication>
@@ -6,7 +10,7 @@
 #include "../widgets/window.h"
 #include "../widgets/bottombar.h"
 
-InsertBlockByTextCommond::InsertBlockByTextCommond(const QString &text,TextEdit *edit,EditWrapper* wrapper):
+InsertBlockByTextCommand::InsertBlockByTextCommand(const QString &text,TextEdit *edit,EditWrapper* wrapper):
     m_text(text),
     m_edit(edit),
     m_wrapper(wrapper)
@@ -21,20 +25,19 @@ InsertBlockByTextCommond::InsertBlockByTextCommond(const QString &text,TextEdit 
     }
 }
 
-InsertBlockByTextCommond::~InsertBlockByTextCommond()
+InsertBlockByTextCommand::~InsertBlockByTextCommand()
 {
 
 }
 
-void InsertBlockByTextCommond::redo()
+void InsertBlockByTextCommand::redo()
 {
     treat(true);
     insertByBlock();
     treat(false);
-
 }
 
-void InsertBlockByTextCommond::undo()
+void InsertBlockByTextCommand::undo()
 {
     treat(true);
 
@@ -49,10 +52,9 @@ void InsertBlockByTextCommond::undo()
     }
 
     treat(false);
-
 }
 
-void InsertBlockByTextCommond::treat(bool isStart)
+void InsertBlockByTextCommand::treat(bool isStart)
 {
     if(m_wrapper!=nullptr){
 
@@ -72,7 +74,7 @@ void InsertBlockByTextCommond::treat(bool isStart)
         QObject::disconnect(m_edit, &QPlainTextEdit::cursorPositionChanged, m_edit, &TextEdit::cursorPositionChanged);
 }
 
-void InsertBlockByTextCommond::insertByBlock()
+void InsertBlockByTextCommand::insertByBlock()
 {
     auto cursor = m_edit->textCursor();
     int block = 1 * 1024 * 1024 ;
@@ -98,9 +100,3 @@ void InsertBlockByTextCommond::insertByBlock()
     }
     m_delPos = cursor.position();
 }
-
-
-
-
-
-

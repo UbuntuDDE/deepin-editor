@@ -1,21 +1,6 @@
-/*
- * Copyright (C) 2017 ~ 2018 Deepin Technology Co., Ltd.
- *
- * Author:     rekols <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2017 - 2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "../common/utils.h"
 #include "../common/settings.h"
@@ -33,13 +18,14 @@
 
 using namespace Dtk::Core;
 
-QVector<QPair<QString,QStringList>> DDropdownMenu::sm_groupEncodeVec;
-
 DDropdownMenu::DDropdownMenu(QWidget *parent)
     : QFrame(parent)
     , m_pToolButton(new DToolButton(this))
     , m_menu(new DMenu)
 {
+    // 更新单独添加的高亮格式文件
+    m_Repository.addCustomSearchPath(KF5_HIGHLIGHT_PATH);
+
     //设置toobutton属性
     m_pToolButton->setFocusPolicy(Qt::StrongFocus);
     m_pToolButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
@@ -49,9 +35,9 @@ DDropdownMenu::DDropdownMenu(QWidget *parent)
     //this->installEventFilter(this);
     //设置图标
     QString theme =  (DGuiApplicationHelper::instance()->applicationPalette().color(QPalette::Background).lightness() < 128) ? "dark" : "light";
-    QString arrowSvgPath = QString(":/images/arrow_%1.svg").arg(theme);
-    //装换图片
-    int scaled =qApp->devicePixelRatio() == 1.25 ? 2 : 1;
+    QString arrowSvgPath = QString(":/images/dropdown_arrow_%1.svg").arg(theme);
+    // 根据当前显示缩放转换图片
+    qreal scaled = this->devicePixelRatioF();
     QSvgRenderer svg_render(arrowSvgPath);
     QPixmap pixmap(QSize(8,5)*scaled);
     pixmap.fill(Qt::transparent);
@@ -64,7 +50,6 @@ DDropdownMenu::DDropdownMenu(QWidget *parent)
     //设置字体
     int fontsize =DFontSizeManager::instance()->fontPixelSize(DFontSizeManager::T9);
     m_font.setPixelSize(fontsize);
-    m_font.setFamily("SourceHanSansSC-Normal");
 
      //添加布局
     QHBoxLayout *layout = new QHBoxLayout();
@@ -108,26 +93,53 @@ void DDropdownMenu::setCurrentAction(QAction *pAct)
 
 void DDropdownMenu::setCurrentTextOnly(const QString &name)
 {
-   QList<QAction*> menuList = m_menu->actions();
+  // QList<QAction*> menuList = m_menu->actions();
 
-   for (int i = 0; i < menuList.size(); i++) {
-       if(menuList[i]->menu()){
-           QList<QAction*> acts = menuList[i]->menu()->actions();
-           if(acts.size() == 0) continue;
-           for (int j = 0; j < acts.size(); j++) {
-           if(acts[j]->text() != name){
-               acts[j]->setCheckable(false);
-               acts[j]->setChecked(false);
-           }
-           else{
-               acts[j]->setCheckable(true);
-               acts[j]->setChecked(true);
-           }
-        }
-      }
+//   for (int i = 0; i < menuList.size(); i++) {
+//       if(menuList[i]->menu()){
+//           QList<QAction*> acts = menuList[i]->menu()->actions();
+//           if(acts.size() == 0) continue;
+//           for (int j = 0; j < acts.size(); j++) {
+//           if(acts[j]->text() != name){
+//               acts[j]->setCheckable(false);
+//               acts[j]->setChecked(false);
+//           }
+//           else{
+//               acts[j]->setCheckable(true);
+//               acts[j]->setChecked(true);
+//           }
+//        }
+//      }
+//   }
+   for(auto ac:m_menu->actions()){
+       setCheckedExclusive(ac,name);
    }
 
    setText(name);
+}
+
+
+void DDropdownMenu::setCheckedExclusive(QAction* action,const QString& name)
+{
+    if(nullptr == action){
+        return;
+    }
+
+    if(action->menu()){
+        for(auto ac:action->menu()->actions()){
+            setCheckedExclusive(ac,name);
+        }
+    }
+    else {
+        if(action->text() != name){
+            action->setCheckable(false);
+            action->setChecked(false);
+        }
+        else{
+            action->setCheckable(true);
+            action->setChecked(true);
+        }
+    }
 }
 
 void DDropdownMenu::slotRequestMenu(bool request)
@@ -176,6 +188,7 @@ void DDropdownMenu::setMenuActionGroup(QActionGroup *actionGroup)
     deleteMenuActionGroup();
     m_actionGroup = actionGroup;
 }
+
 void DDropdownMenu::deleteMenuActionGroup()
 {
     if (m_actionGroup != nullptr) {
@@ -186,9 +199,9 @@ void DDropdownMenu::deleteMenuActionGroup()
 
 void DDropdownMenu::setTheme(const QString &theme)
 {
-    QString arrowSvgPath = QString(":/images/arrow_%1.svg").arg(theme);
-    //装换图片
-    int scaled =qApp->devicePixelRatio() == 1.25 ? 2 : 1;
+    QString arrowSvgPath = QString(":/images/dropdown_arrow_%1.svg").arg(theme);
+    // 根据当前显示缩放转换图片
+    qreal scaled = this->devicePixelRatioF();
     QSvgRenderer svg_render(arrowSvgPath);
 
     QPixmap pixmap(QSize(8,5)*scaled);
@@ -221,49 +234,22 @@ DToolButton *DDropdownMenu::getButton()
     return m_pToolButton;
 }
 
+QString DDropdownMenu::getCurrentText() const
+{
+    return m_text;
+}
+
 DDropdownMenu *DDropdownMenu::createEncodeMenu()
 {
     DDropdownMenu *m_pEncodeMenu = new DDropdownMenu();
     DMenu* m_pMenu = new DMenu();
-    if(sm_groupEncodeVec.isEmpty()){
-        QFile file(":/encodes/encodes.ini");
-        QString data;
-        if(file.open(QIODevice::ReadOnly))
-        {
-           data = QString::fromUtf8(file.readAll());
-           file.close();
-        }
 
-        QTextStream readStream(&data,QIODevice::ReadOnly);
-        while (!readStream.atEnd()) {
-            QString group = readStream.readLine();
-            QString key = group.mid(1,group.length()-2);
-            QString encodes = readStream.readLine();
-            QString value = encodes.mid(8,encodes.length()-2);
-            sm_groupEncodeVec.append(QPair<QString,QStringList>(key,value.split(",")));
-
-            QStringList list = value.split(",");
-            QMenu* groupMenu = new QMenu(QObject::tr(key.toLocal8Bit().data()));
-             foreach(QString var,list)
-             {
-               QAction *act= groupMenu->addAction(QObject::tr(var.toLocal8Bit().data()));
-               if(act->text() == "UTF-8") {
-                   m_pEncodeMenu->m_pActUtf8 = act;
-                   act->setChecked(true);
-               }else {
-                   act->setCheckable(false);
-               }
-
-             }
-
-            m_pMenu->addMenu(groupMenu);
-        }
-    }else {
-
-        int cnt = sm_groupEncodeVec.size();
-        for (int i = 0;i < cnt;i++) {
-            QMenu* groupMenu = new QMenu(QObject::tr(sm_groupEncodeVec[i].first.toLocal8Bit().data()));
-             foreach(QString var,sm_groupEncodeVec[i].second)
+    auto groupEncodeVec = Utils::getSupportEncoding();
+    if (!groupEncodeVec.isEmpty()) {
+        int cnt = groupEncodeVec.size();
+        for (int i = 0; i < cnt;i++) {
+            QMenu* groupMenu = new QMenu(QObject::tr(groupEncodeVec[i].first.toLocal8Bit().data()));
+             foreach(QString var, groupEncodeVec[i].second)
              {
                QAction *act= groupMenu->addAction(QObject::tr(var.toLocal8Bit().data()));
                if(act->text() == "UTF-8") {
@@ -333,6 +319,13 @@ DDropdownMenu *DDropdownMenu::createHighLightMenu()
         m_pActionGroup->addAction(action);
     }
 
+    // 转发选中“None“无高亮选项的信号
+    connect(noHlAction, &QAction::triggered, m_pHighLightMenu, [noHlAction, m_pHighLightMenu] (bool checked) {
+        if (checked) {
+            emit m_pHighLightMenu->currentActionChanged(noHlAction);
+        }
+    });
+
     connect(m_pActionGroup, &QActionGroup::triggered, m_pHighLightMenu, [m_pHighLightMenu] (QAction *action) {
         const auto defName = action->text();
         const auto def = m_pHighLightMenu->m_Repository.definitionForName(defName);
@@ -342,7 +335,7 @@ DDropdownMenu *DDropdownMenu::createHighLightMenu()
         else {
             m_pHighLightMenu->setText(tr("None"));
         }
-
+        
     });
 
     m_pHighLightMenu->setText(tr("None"));
@@ -369,10 +362,10 @@ QIcon DDropdownMenu::createIcon()
         arrowPixmap = m_arrowPixmap;
     }
 
-    //根据字体大小设置icon大小
-    //height 30    width QFontMetrics fm(font()) fm.width(text)+40;
-    int fontWidth = QFontMetrics(m_font).width(m_text)+20;
-    int fontHeight = QFontMetrics(m_font).height();
+    // 根据字体大小设置icon大小，按计算的字体高度，而非从字体文件中读取的高度(部分字体中英文高度不同)
+    QFontMetrics metrics(m_font);
+    int fontWidth = metrics.width(m_text) + 20;
+    int fontHeight = metrics.size(Qt::TextSingleLine, m_text).height();
     int iconW = 8;
     int iconH = 5;
 

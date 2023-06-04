@@ -1,24 +1,6 @@
-/* -*- Mode: C++; indent-tabs-mode: nil; tab-width: 4 -*-
- * -*- coding: utf-8 -*-
- *
- * Copyright (C) 2011 ~ 2018 Deepin, Inc.
- *
- * Author:     Wang Yong <wangyong@deepin.com>
- * Maintainer: Rekols    <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2011-2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef STARTMANAGER_H
 #define STARTMANAGER_H
@@ -41,13 +23,12 @@ class StartManager : public QObject
     Q_CLASSINFO("D-Bus Interface", "com.deepin.Editor")
 
 public:
-    struct FileTabInfo
-    {
+    struct FileTabInfo {
         int windowIndex;
         int tabIndex;
     };
 
-    static StartManager* instance();
+    static StartManager *instance();
     explicit StartManager(QObject *parent = nullptr);
     bool checkPath(const QString &file);
     bool ifKlu();
@@ -83,6 +64,11 @@ public:
      */
     QList<int> analyzeBookmakeInfo(QString bookmarkInfo);
 
+    // 主动更新记录书签信息
+    void recordBookmark(const QString &localPath, const QList<int> &bookmark);
+    // 查找文件对应的书签记录
+    QList<int> findBookmark(const QString &localPath);
+
 public slots:
     Q_SCRIPTABLE void openFilesInTab(QStringList files);
     Q_SCRIPTABLE void openFilesInWindow(QStringList files);
@@ -90,7 +76,7 @@ public slots:
     void createWindowFromWrapper(const QString &tabName, const QString &filePath, const QString &qstrTruePath, EditWrapper *buffer, bool isModifyed);
     void loadTheme(const QString &themeName);
 
-    Window* createWindow(bool alwaysCenter = false);
+    Window *createWindow(bool alwaysCenter = false);
     void initWindowPosition(Window *window, bool alwaysCenter = false);
     void popupExistTabs(FileTabInfo info);
     FileTabInfo getFileTabInfo(QString file);
@@ -103,10 +89,23 @@ public slots:
     void slotCreatNewwindow();
     void slotCloseWindow();
 
+    // 延迟备份定时器，超时后备份配置文件
+    void slotDelayBackupFile();
+
+protected:
+    // 接收延迟更新定时任务，执行备份配置文件
+    virtual void timerEvent(QTimerEvent *e) override;
+
 private:
     void initBlockShutdown();
+    // 初始化书签信息
+    void initBookmark();
+    // 保存书签信息
+    void saveBookmark();
+
+private:
     static StartManager *m_instance;
-    QList<Window*> m_windows;
+    QList<Window *> m_windows;
 
     QDBusReply<QDBusUnixFileDescriptor> m_reply;
     QDBusInterface *m_pLoginManager = nullptr;
@@ -115,12 +114,16 @@ private:
     QDBusPendingReply<QDBusUnixFileDescriptor> m_inhibitReply;
     QScopedPointer<Dock> m_pDock;
     QScopedPointer<Entry> m_pEntry;
-    QStringList m_qlistTemFile;///<备份信息列表
+    QStringList m_qlistTemFile;                 ///< 备份信息列表
+    QHash<QString, QList<int>> m_bookmarkTable; ///< 书签标记信息表
     QTimer *m_pTimer;
-    QString m_blankFileDir;///<新建文件目录
-    QString m_backupDir;///<用户备份文件目录
-    QString m_autoBackupDir;///<自动备份文件目录
-    Window* pFocusWindow;
+    QBasicTimer m_DelayTimer;   ///< 延迟备份定时器
+    QString m_blankFileDir;     ///< 新建文件目录
+    QString m_backupDir;        ///< 用户备份文件目录
+    QString m_autoBackupDir;    ///< 自动备份文件目录
+    Window *pFocusWindow;
+
+    bool    m_bIsTagDragging = false;   ///< 当前Tab页处于拖拽状态时，部分处理被延后
 };
 
 #endif
