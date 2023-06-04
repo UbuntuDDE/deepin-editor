@@ -1,19 +1,6 @@
-/*
-* Copyright (C) 2019 ~ 2020 Deepin Technology Co., Ltd.
-*
-* Author:     liumaochuan <liumaochuan@uniontech.com>
-* Maintainer: liumaochuan <liumaochuan@uniontech.com>
-* This program is free software: you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation, either version 3 of the License, or
-* any later version.
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-* You should have received a copy of the GNU General Public License
-* along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
+// SPDX-FileCopyrightText: 2019 - 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "leftareaoftextedit.h"
 #include "linenumberarea.h"
@@ -38,8 +25,8 @@ LeftAreaTextEdit::LeftAreaTextEdit(TextEdit *textEdit) :
     m_pLineNumberArea->setContentsMargins(0, 0, 0, 0);
     //m_pBookMarkArea->setFixedWidth(14);
    // m_pFlodArea->setFixedWidth(18);
-    m_pBookMarkArea->setFixedWidth(textEdit->cursorRect(textEdit->textCursor()).height());
-    m_pFlodArea->setFixedWidth(textEdit->cursorRect(textEdit->textCursor()).height());
+    //m_pBookMarkArea->setFixedWidth(textEdit->cursorRect(textEdit->textCursor()).height());
+   // m_pFlodArea->setFixedWidth(textEdit->cursorRect(textEdit->textCursor()).height());
 
     pHLayout->addWidget(m_pBookMarkArea);
     pHLayout->addWidget(m_pLineNumberArea);
@@ -116,6 +103,12 @@ void LeftAreaTextEdit::paintEvent(QPaintEvent *event)
         bdColor.setAlphaF(0.03);
     }
     painter.fillRect(event->rect(), bdColor);
+}
+
+
+TextEdit* LeftAreaTextEdit::getEdit()
+{
+    return m_pTextEdit;
 }
 
 

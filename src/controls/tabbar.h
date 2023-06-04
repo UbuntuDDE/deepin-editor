@@ -1,21 +1,6 @@
-/*
- * Copyright (C) 2017 ~ 2018 Deepin Technology Co., Ltd.
- *
- * Author:     rekols <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2017 - 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
 
 #ifndef TABBAR_H
 #define TABBAR_H
@@ -40,6 +25,11 @@ public:
     void addTabWithIndex(int index, const QString &filePath, const QString &tabName, const QString &tipPath = QString::null);
     void closeTab(int index);
     void closeCurrentTab();
+    /**
+     * @brief closeCurrentTab 移除指定文件对应的tab标签项
+     * @param strFilePath 指定的文件（路径加文件名）
+     */
+    void closeCurrentTab(const QString &strFilePath);
     void closeOtherTabs();
 
     void closeLeftTabs(const QString &filePath);
@@ -57,6 +47,9 @@ public:
     QString truePathAt(int index) const;
     QString fileAt(int index) const;
     QString textAt(int index) const;
+
+    // 设置索引为index的标签页显示文本为text
+    void setTabText(int index, const QString &text);
 
     void setTabPalette(const QString &activeColor, const QString &inactiveColor);
     void setBackground(const QString &startColor, const QString &endColor);
@@ -81,6 +74,7 @@ protected:
     void mousePressEvent(QMouseEvent *e);
     void dropEvent(QDropEvent *e);
     void resizeEvent(QResizeEvent *event);
+
 private:
     void handleTabMoved(int fromIndex, int toIndex);
     void handleTabReleased(int index);
@@ -110,6 +104,8 @@ private:
     QString m_qstrDragName;
     QString m_qstrDragPath;
     EditWrapper *m_pWrapper = nullptr;
+
+    bool m_bLayoutDirty = false;
 
 public:
     static QPixmap *sm_pDragPixmap;

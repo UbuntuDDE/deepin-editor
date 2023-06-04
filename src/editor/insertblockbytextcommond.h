@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2022 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #ifndef INSERTBLOCKBYTEXTCOMMOND_H
 #define INSERTBLOCKBYTEXTCOMMOND_H
 
@@ -9,11 +13,11 @@ class TextEdit;
 class EditWrapper;
 
 //分块插入文本-撤销重做
-class InsertBlockByTextCommond:public QUndoCommand
+class InsertBlockByTextCommand:public QUndoCommand
 {
 public:
-    InsertBlockByTextCommond(const QString& text,TextEdit* edit,EditWrapper* wrapper);
-    virtual ~InsertBlockByTextCommond();
+    InsertBlockByTextCommand(const QString& text,TextEdit* edit,EditWrapper* wrapper);
+    virtual ~InsertBlockByTextCommand();
 
     virtual void redo();
     virtual void undo();
@@ -27,7 +31,7 @@ private:
     TextEdit* m_edit;
     EditWrapper* m_wrapper;
     int m_insertPos;
-    int m_delPos;
+    int m_delPos {0};
     QString m_selected;
 };
 

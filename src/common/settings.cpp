@@ -1,29 +1,13 @@
-/* -*- Mode: C++; indent-tabs-mode: nil; tab-width: 4 -*-
- * -*- coding: utf-8 -*-
- *
- * Copyright (C) 2011 ~ 2018 Deepin, Inc.
- *
- * Author:     Wang Yong <wangyong@deepin.com>
- * Maintainer: Rekols    <rekols@foxmail.com>
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-FileCopyrightText: 2011-2023 UnionTech Software Technology Co., Ltd.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 #include "utils.h"
 #include "settings.h"
 
 #include "dthememanager.h"
 #include "../controls/fontitemdelegate.h"
+#include "../widgets/pathsettintwgt.h"
 #include <DSettings>
 #include <DSettingsGroup>
 #include <DSettingsWidgetFactory>
@@ -37,6 +21,46 @@
 #include <QStandardPaths>
 
 Settings *Settings::s_pSetting = nullptr;
+
+CustemBackend::CustemBackend(const QString &filepath, QObject *parent)
+    : DSettingsBackend (parent),
+      m_settings (new QSettings(filepath, QSettings::IniFormat))
+{
+
+}
+
+void CustemBackend::doSync()
+{
+    m_settings->sync();
+}
+
+void CustemBackend::doSetOption(const QString &key, const QVariant &value)
+{
+    /*
+     * 将配置值写入config配置文件
+     * 为了规避数据写入重复或者错乱，配置写入之前上锁，写入结束后开锁
+     */
+    m_writeLock.lock();
+    m_settings->setValue(key, value);
+    m_settings->sync();
+    m_writeLock.unlock();
+}
+
+QStringList CustemBackend::keys() const
+{
+    QStringList keyList = m_settings->allKeys();
+
+    return keyList;
+}
+
+QVariant CustemBackend::getOption(const QString &key) const
+{
+    return m_settings->value(key);
+}
+
+CustemBackend::~CustemBackend()
+{}
+
 Settings::Settings(QWidget *parent)
     : QObject(parent)
 {
@@ -45,6 +69,7 @@ Settings::Settings(QWidget *parent)
                             .arg(qApp->organizationName())
                             .arg(qApp->applicationName());
 
+    removeLockFiles();
     m_backend = new QSettingBackend(strConfigPath);
 
     settings = DSettings::fromJsonFile(":/resources/settings.json");
@@ -76,10 +101,11 @@ Settings::Settings(QWidget *parent)
     auto hightlightCurrentLine = settings->option("base.font.hightlightcurrentline");
     connect(hightlightCurrentLine, &Dtk::Core::DSettingsOption::valueChanged, this, &Settings::slotsigHightLightCurrentLine);
 
+    /* 设置页面主题变更信息监听，当前暂时无用，暂且做屏蔽处理
     auto theme = settings->option("advance.editor.theme");
     connect(theme, &Dtk::Core::DSettingsOption::valueChanged, this, [ = ](QVariant value) {
         //emit themeChanged(value.toString());
-    });
+    }); */
 
     auto tabSpaceNumber = settings->option("advance.editor.tabspacenumber");
     connect(tabSpaceNumber, &Dtk::Core::DSettingsOption::valueChanged, this, &Settings::slotsigAdjustTabSpaceNumber);
@@ -106,6 +132,63 @@ Settings::Settings(QWidget *parent)
     connect(settings, &Dtk::Core::DSettings::valueChanged, this, &Settings::slotCustomshortcut);
 }
 
+void Settings::setSavePath(int id,const QString& path)
+{
+    switch (id) {
+    case PathSettingWgt::LastOptBox:{
+        auto opt = settings->option("advance.open_save_setting.open_save_lastopt_path");
+        opt->setValue(path);
+        break;
+    }
+    case PathSettingWgt::CurFileBox:{
+        auto opt = settings->option("advance.open_save_setting.open_save_curfile_path");
+        opt->setValue(path);
+        break;
+    }
+    case PathSettingWgt::CustomBox:{
+        auto opt = settings->option("advance.open_save_setting.open_save_custom_path");
+        opt->setValue(path);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+
+QString Settings::getSavePath(int id)
+{
+    QString path;
+    switch (id) {
+    case PathSettingWgt::LastOptBox:{
+        path = settings->option("advance.open_save_setting.open_save_lastopt_path")->value().toString();
+        break;
+    }
+    case PathSettingWgt::CurFileBox:{
+        path = settings->option("advance.open_save_setting.open_save_curfile_path")->value().toString();
+        break;
+    }
+    case PathSettingWgt::CustomBox:{
+        path = settings->option("advance.open_save_setting.open_save_custom_path")->value().toString();
+        break;
+    }
+    default:
+        break;
+    }
+
+    return path;
+}
+
+void Settings::setSavePathId(int id)
+{
+    auto opt = settings->option("advance.open_save_setting.savingpathwgt");
+    opt->setValue(QString::number(id));
+}
+int Settings::getSavePathId()
+{
+   return settings->option("advance.open_save_setting.savingpathwgt")->value().toInt();
+
+}
 Settings::~Settings()
 {
     if (m_backend != nullptr) {
@@ -134,19 +217,17 @@ void Settings::dtkThemeWorkaround(QWidget *parent, const QString &theme)
     }
 }
 
-//QWidget *Settings::createFontComBoBoxHandle(QObject *obj)
 QPair<QWidget *, QWidget *> Settings::createFontComBoBoxHandle(QObject *obj)
 {
     auto option = qobject_cast<DTK_CORE_NAMESPACE::DSettingsOption *>(obj);
 
     QComboBox *comboBox = new QComboBox;
-    //QWidget *optionWidget = DSettingsWidgetFactory::createTwoColumWidget(option, comboBox);
     QPair<QWidget *, QWidget *> optionWidget = DSettingsWidgetFactory::createStandardItem(QByteArray(), option, comboBox);
 
     QFontDatabase fontDatabase;
     comboBox->addItems(fontDatabase.families());
-    //comboBox->setItemDelegate(new FontItemDelegate);
-    //comboBox->setFixedSize(240, 36);
+    // 设置最小宽度，以保持和下方 OptionDSpinBox 一样的长度
+    comboBox->setMinimumSize(240, 36);
 
     if (option->value().toString().isEmpty()) {
         option->setValue(QFontDatabase::systemFont(QFontDatabase::FixedFont).family());
@@ -166,6 +247,27 @@ QPair<QWidget *, QWidget *> Settings::createFontComBoBoxHandle(QObject *obj)
     return optionWidget;
 }
 
+QWidget* Settings::createSavingPathWgt(QObject* obj)
+{
+    auto option = qobject_cast<DTK_CORE_NAMESPACE::DSettingsOption *>(obj);
+    QString name = option->name();
+    PathSettingWgt* pathwgt = new PathSettingWgt;
+    QPair<QWidget *, QWidget *> optionWidget = DSettingsWidgetFactory::createStandardItem(QByteArray(), option, pathwgt);
+
+    connect(option, &DSettingsOption::valueChanged, pathwgt, [ = ](QVariant var) {
+        int id = var.toInt();
+        pathwgt->onSaveIdChanged(id);
+    });
+
+    auto custompath = s_pSetting->settings->option("advance.open_save_setting.open_save_custom_path");
+    connect(custompath, &Dtk::Core::DSettingsOption::valueChanged, [=](QVariant var){
+        //pathwgt->setEditText(var.toString());
+    });
+
+
+    return optionWidget.second;
+}
+
 QPair<QWidget *, QWidget *> Settings::createKeySequenceEditHandle(QObject *obj)
 {
     auto option = qobject_cast<DTK_CORE_NAMESPACE::DSettingsOption *>(obj);
@@ -173,19 +275,12 @@ QPair<QWidget *, QWidget *> Settings::createKeySequenceEditHandle(QObject *obj)
 
     shortCutLineEdit->ShortcutDirection(Qt::AlignLeft);
     shortCutLineEdit->setFocusPolicy(Qt::StrongFocus);
-    if (option->value().toString().isEmpty()) {
-        //option->setValue();
-    }
 
     // init.
     shortCutLineEdit->setKeySequence(QKeySequence(option->value().toString()));
     QPair<QWidget *, QWidget *> optionWidget = DSettingsWidgetFactory::createStandardItem(QByteArray(), option, shortCutLineEdit);
 
     option->connect(shortCutLineEdit, &DKeySequenceEdit::editingFinished, [ = ](const QKeySequence & sequence) {
-
-        if (sequence.toString() == "Enter") qDebug() << "==========Enter";
-
-
         QString checkName = option->key();
         QString reason;
         bool bIsConflicts = false;
@@ -193,10 +288,19 @@ QPair<QWidget *, QWidget *> Settings::createKeySequenceEditHandle(QObject *obj)
         QStringList keySplitList = option->key().split(".");
         keySplitList[1] = QString("%1_keymap_%2").arg(keySplitList[1]).arg(keymap->value().toString());
 
-        if (!instance()->checkShortcutValid(checkName, sequence.toString(), reason, bIsConflicts)) {
+        // 获取默认设置的组合键序列
+        QString defaultKey;
+        auto defaultOption = instance()->settings->option(keySplitList.join("."));
+        if (defaultOption) {
+            defaultKey = defaultOption->defaultValue().toString();
+        }
+
+        // 判断新设置的组合键序列是否允许
+        if (!instance()->checkShortcutValid(checkName, sequence.toString(), reason, bIsConflicts, defaultKey)) {
             instance()->m_pDialog = instance()->createDialog(reason, "", bIsConflicts);
             instance()->m_pDialog->exec();
-            shortCutLineEdit->setKeySequence(QKeySequence(instance()->settings->value(keySplitList.join(".")).toString()));
+            // 恢复组合键序列
+            shortCutLineEdit->setKeySequence(instance()->settings->value(keySplitList.join(".")).toString());
             keymap->setValue("emacs");
             keymap->setValue("customize");
             return;
@@ -209,36 +313,36 @@ QPair<QWidget *, QWidget *> Settings::createKeySequenceEditHandle(QObject *obj)
         if (keymap->value().toString() != "customize") {
             instance()->m_bUserChangeKey = true;
 
-            for (auto option : instance()->settings->group("shortcuts.window_keymap_customize")->options()) {
-                QStringList keySplitList = option->key().split(".");
-                keySplitList[1] = QString("window_keymap_%1").arg(keymap->value().toString());
+            for (auto loopOption : instance()->settings->group("shortcuts.window_keymap_customize")->options()) {
+                QStringList loopKeySplitList = loopOption->key().split(".");
+                loopKeySplitList[1] = QString("window_keymap_%1").arg(keymap->value().toString());
 
-                if (option->value().toString() == sequence.toString()) {
+                if (loopOption->value().toString() == sequence.toString()) {
 
-                    if (checkName.contains(keySplitList.last())) {
+                    if (checkName.contains(loopKeySplitList.last())) {
                         keymap->setValue("customize");
                         //return;
                     } else {
                         bIsConflicts = true;
-                        keySplitList[1] = QString("window_keymap_%1").arg("customize");
-                        conflictsKeys = keySplitList.join(".");
+                        loopKeySplitList[1] = QString("window_keymap_%1").arg("customize");
+                        conflictsKeys = loopKeySplitList.join(".");
                     }
                 }
             }
 
-            for (auto option : instance()->settings->group("shortcuts.editor_keymap_customize")->options()) {
-                QStringList keySplitList = option->key().split(".");
-                keySplitList[1] = QString("editor_keymap_%1").arg(keymap->value().toString());
+            for (auto loopOption : instance()->settings->group("shortcuts.editor_keymap_customize")->options()) {
+                QStringList loopKeySplitList = loopOption->key().split(".");
+                loopKeySplitList[1] = QString("editor_keymap_%1").arg(keymap->value().toString());
 
-                if (option->value().toString() == sequence.toString()) {
+                if (loopOption->value().toString() == sequence.toString()) {
 
-                    if (checkName.contains(keySplitList.last())) {
+                    if (checkName.contains(loopKeySplitList.last())) {
                         keymap->setValue("customize");
                         //return;
                     } else {
                         bIsConflicts = true;
-                        keySplitList[1] = QString("editor_keymap_%1").arg("customize");
-                        conflictsKeys = keySplitList.join(".");
+                        loopKeySplitList[1] = QString("editor_keymap_%1").arg("customize");
+                        conflictsKeys = loopKeySplitList.join(".");
                     }
                 }
             }
@@ -247,32 +351,32 @@ QPair<QWidget *, QWidget *> Settings::createKeySequenceEditHandle(QObject *obj)
         }  else {
             bIsCustomize = true;
             instance()->m_bUserChangeKey = true;
-            for (auto option : instance()->settings->group("shortcuts.window_keymap_customize")->options()) {
-                QStringList keySplitList = option->key().split(".");
-                keySplitList[1] = QString("window_keymap_%1").arg(keymap->value().toString());
+            for (auto loopOption : instance()->settings->group("shortcuts.window_keymap_customize")->options()) {
+                QStringList loopKeySplitList = loopOption->key().split(".");
+                loopKeySplitList[1] = QString("window_keymap_%1").arg(keymap->value().toString());
 
-                if (option->value().toString() == sequence.toString()) {
+                if (loopOption->value().toString() == sequence.toString()) {
 
-                    if (checkName.contains(keySplitList.last())) {
+                    if (checkName.contains(loopKeySplitList.last())) {
                         //return;
                     } else {
                         bIsConflicts = true;
-                        conflictsKeys = keySplitList.join(".");
+                        conflictsKeys = loopKeySplitList.join(".");
                     }
                 }
             }
 
-            for (auto option : instance()->settings->group("shortcuts.editor_keymap_customize")->options()) {
-                QStringList keySplitList = option->key().split(".");
-                keySplitList[1] = QString("editor_keymap_%1").arg(keymap->value().toString());
+            for (auto loopOption : instance()->settings->group("shortcuts.editor_keymap_customize")->options()) {
+                QStringList loopKeySplitList = loopOption->key().split(".");
+                loopKeySplitList[1] = QString("editor_keymap_%1").arg(keymap->value().toString());
 
-                if (option->value().toString() == sequence.toString()) {
+                if (loopOption->value().toString() == sequence.toString()) {
 
-                    if (checkName.contains(keySplitList.last())) {
+                    if (checkName.contains(loopKeySplitList.last())) {
                         //return;
                     } else {
                         bIsConflicts = true;
-                        conflictsKeys = keySplitList.join(".");
+                        conflictsKeys = loopKeySplitList.join(".");
                     }
                 }
             }
@@ -353,6 +457,36 @@ void KeySequenceEdit::slotDSettingsOptionvalueChanged(const QVariant & value)
     this->setKeySequence(QKeySequence(keyseq));
 }
 
+bool KeySequenceEdit::eventFilter(QObject *object, QEvent *event)
+{
+    //设置界面　回车键和空格键　切换输入 梁卫东　２０２０－０８－２１　１６：２８：３１
+    if (object == this) {
+        if (event->type() == QEvent::KeyPress) {
+            QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+
+           //判断是否包含组合键　梁卫东　２０２０－０９－０２　１５：０３：５６
+            Qt::KeyboardModifiers modifiers = keyEvent->modifiers();
+            bool bHasModifier = (modifiers & Qt::ShiftModifier || modifiers & Qt::ControlModifier ||
+                                 modifiers & Qt::AltModifier);
+
+            if (!bHasModifier && (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Space)) {
+                QRect rect = this->rect();
+                QList<QLabel*> childern = findChildren<QLabel*>();
+
+                for (int i =0; i < childern.size(); i++) {
+                    QPoint pos(25,rect.height()/2);
+
+                    QMouseEvent event0(QEvent::MouseButtonPress, pos, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+                    DApplication::sendEvent(childern[i], &event0);
+                }
+
+                return true;
+            }
+        }
+    }
+
+    return DKeySequenceEdit::eventFilter(object, event);
+}
 Settings *Settings::instance()
 {
     if (s_pSetting == nullptr) {
@@ -368,13 +502,23 @@ void Settings::updateAllKeysWithKeymap(QString keymap)
     for (auto option : settings->group("shortcuts.window")->options()) {
         QStringList keySplitList = option->key().split(".");
         keySplitList[1] = QString("%1_keymap_%2").arg(keySplitList[1]).arg(keymap);
-        option->setValue(settings->option(keySplitList.join("."))->value().toString());
+        auto opt = settings->option(keySplitList.join("."));
+        if (opt) {
+            option->setValue(opt->value().toString());
+        } else {
+            qWarning() << "Unknown shortcut key:" << keySplitList.join(".");
+        }
     }
 
     for (auto option : settings->group("shortcuts.editor")->options()) {
         QStringList keySplitList = option->key().split(".");
         keySplitList[1] = QString("%1_keymap_%2").arg(keySplitList[1]).arg(keymap);
-        option->setValue(settings->option(keySplitList.join("."))->value().toString());
+        auto opt = settings->option(keySplitList.join("."));
+        if (opt) {
+            option->setValue(opt->value().toString());
+        } else {
+            qWarning() << "Unknown shortcut key:" << keySplitList.join(".");
+        }
     }
 
     m_bUserChangeKey = false;
@@ -399,7 +543,7 @@ void Settings::copyCustomizeKeysFromKeymap(QString keymap)
     m_bUserChangeKey = false;
 }
 
-bool Settings::checkShortcutValid(const QString &Name, QString Key, QString &Reason, bool &bIsConflicts)
+bool Settings::checkShortcutValid(const QString &Name, QString Key, QString &Reason, bool &bIsConflicts, QString defaultValue)
 {
     Q_UNUSED(Name);
 
@@ -426,14 +570,14 @@ bool Settings::checkShortcutValid(const QString &Name, QString Key, QString &Rea
         return  false;
     }
 
-//    // 与设置里的快捷键冲突检测
-//    if (isShortcutConflict(Name, Key)) {
-//        Reason = tr("This shortcut key conflicts with %1, click add to make this shortcut key take effect immediately").arg(style);
-//        bIsConflicts = true;
-//        return  false;
-//    }
+    // 屏蔽Shift组合键处理，但允许恢复为默认组合键序列
+    if (Key.contains("Shift")
+            && Key != defaultValue) {
+        Reason = tr("The shortcut %1 is invalid, please set another one.").arg(style);
+        bIsConflicts = false;
+        return false;
+    }
 
-//    bIsConflicts = true;
     return true;
 }
 
@@ -463,6 +607,29 @@ DDialog *Settings::createDialog(const QString &title, const QString &content, co
     }
 
     return dialog;
+}
+
+//删除config.conf配置文件目录下的.lock文件和.rmlock文件
+void Settings::removeLockFiles()
+{
+    QString configPath = QString("%1/%2/%3")
+            .arg(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation))
+            .arg(qApp->organizationName())
+            .arg(qApp->applicationName());
+
+    QDir dir(configPath);
+    if (!dir.exists()) {
+        return;
+    }
+
+    dir.setFilter(QDir::Files);
+    QStringList nameList = dir.entryList();
+    for (auto name: nameList) {
+        if (name.contains(".lock") || name.contains(".rmlock")) {
+            QFile file(name);
+            file.remove();
+        }
+    }
 }
 
 void Settings::slotCustomshortcut(const QString &key, const QVariant &value)
@@ -501,7 +668,7 @@ void Settings::slotsigAdjustFont(QVariant value)
 
 void Settings::slotsigAdjustFontSize(QVariant value)
 {
-    emit sigAdjustFontSize(value.toInt());
+    emit sigAdjustFontSize(value.toReal());
 }
 
 void Settings::slotsigAdjustWordWrap(QVariant value)
@@ -542,4 +709,16 @@ void Settings::slotsigAdjustTabSpaceNumber(QVariant value)
 void Settings::slotupdateAllKeysWithKeymap(QVariant value)
 {
     updateAllKeysWithKeymap(value.toString());
+}
+
+KeySequenceEdit::KeySequenceEdit(DTK_CORE_NAMESPACE::DSettingsOption *opt, QWidget *parent)
+    : DKeySequenceEdit(parent)
+{
+    m_pOption = opt;
+    this->installEventFilter(this);
+}
+
+DSettingsOption *KeySequenceEdit::option()
+{
+    return m_pOption;
 }
