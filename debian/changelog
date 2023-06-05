@@ -1,3 +1,9 @@
+deepin-editor (6.0.10-1ubuntu2) lunar; urgency=medium
+
+  * New upstream release for lunar
+
+ -- Ananta Mishra <mishraananta2017@gmail.com>  Sun, 04 Jun 2023 17:06:00 +0545
+
 deepin-editor (5.9.14-1ubuntu1) impish; urgency=medium
 
   * New upstream release for impish.

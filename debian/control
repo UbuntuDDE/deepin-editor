@@ -3,16 +3,19 @@ Section: editors
 Priority: optional
 Maintainer: Ananta Mishra <mishraananta2017@gmail.com>
 XSBC-Original-Maintainer: Debian Deepin Packaging Team <pkg-deepin-devel@lists.alioth.debian.org>
-Uploaders: Ma Aiguo <imaiguo@gmail.com>,
+Uploaders:
+ Ma Aiguo <imaiguo@gmail.com>,
 Build-Depends:
  cmake,
  debhelper-compat (= 13),
+ libchardet-dev,
  libdframeworkdbus-dev,
- libdtkcore-dev (>= 5.5~),
- libdtkwidget-dev (>= 5.5~),
+ libdtkcore-dev (>= 5.5.17~),
+ libdtkwidget-dev (>= 5.5.17~),
  libenca-dev (>= 1.19),
  libgmock-dev,
  libgtest-dev,
+ libicu-dev,
  libkf5codecs-dev,
  libkf5syntaxhighlighting-dev,
  libpolkit-qt5-1-dev,
@@ -29,10 +32,10 @@ Package: deepin-editor
 Architecture: any
 Depends:
  dde-qt5integration,
- ${shlibs:Depends},
- ${misc:Depends},
  libdtkwidget5 (>= 5.4.11),
- libenca0 (>= 1.19)
+ libenca0 (>= 1.19),
+ ${misc:Depends},
+ ${shlibs:Depends},
 Description: Text editor for DDE (Deepin Desktop Environment)
  Advanced text editor based on dtk.
  .
